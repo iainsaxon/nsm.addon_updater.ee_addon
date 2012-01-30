@@ -76,6 +76,41 @@ class Nsm_addon_updater_acc
 	function set_sections()
 	{
 		$EE =& get_instance();
+		
+		$EE->cp->load_package_js("accessory_tab");
+		$EE->cp->load_package_css("accessory_tab");
+		
+		$addons = array();
+		// create basic table of addons using nsm-addon-updater
+		foreach ($EE->addons->_packages as $addon_id => $addon) {
+			$config_file = PATH_THIRD . '/' . $addon_id . '/config.php';
+			if (!file_exists($config_file)) {
+				continue;
+			}
+			include $config_file;
+			// Is there a file with the xml url?
+			if (isset($config['nsm_addon_updater']['versions_xml'])) {
+				$addons[$addon_id] = array(
+					'addon_name' 		=> $config['name'],
+					'installed_version' => $config['version'],
+					'extension_class' 	=> $addon_id
+				);
+			}
+			
+		}
+		$this->sections['Available Updates'] = $EE->load->view("/accessory/index", array('addons' => $addons), TRUE); ; 
+	}
+
+	/**
+	* Set the sections and content for the accessory
+	*
+	* @access	public
+	* @return	void
+	*/
+	function process_ajax_feeds()
+	{
+		$EE =& get_instance();
+		
 		$versions = FALSE;
 
 		if ($feeds = $this->_updateFeeds()) {
@@ -120,11 +155,71 @@ class Nsm_addon_updater_acc
 				}
 			}
 		}
-
-		$EE->cp->load_package_js("accessory_tab");
-		$EE->cp->load_package_css("accessory_tab");
-
+		
 		$this->sections['Available Updates'] = $EE->load->view("/accessory/updates", array('versions' => $versions), TRUE); 
+	}
+
+
+	/**
+	* Set the sections and content for the accessory
+	*
+	* @access	public
+	* @return	void
+	*/
+	function process_ajax_version_request()
+	{
+		$EE =& get_instance();
+		
+		$addon_id = $EE->input->get('addon_id');
+		$feed = array();
+		$version = $this->_updateFeed($addon_id);
+		
+		if (!$version) {
+			return false;
+		}
+		
+		$namespaces = $feed->getNameSpaces(true);
+		$latest_version = 0;
+
+		include PATH_THIRD . '/' . $addon_id . '/config.php';
+
+		if (!empty($feed->channel->item)) {
+			foreach ($feed->channel->item as $version) {
+				$ee_addon = $version->children($namespaces['ee_addon']);
+				$version_number = (string)$ee_addon->version;
+
+				if (version_compare($version_number, $config['version'], '>') && version_compare($version_number, $latest_version, '>') ) {
+				    $latest_version = $version_number;
+					$versions[$addon_id] = array(
+						'addon_name' 		=> $config['name'],
+						'installed_version' => $config['version'],
+						'title' 			=> (string)$version->title,
+						'latest_version' 	=> $version_number,
+						'notes' 			=> (string)$version->description,
+						'docs_url' 			=> (string)$version->link,
+						'download' 			=> FALSE,
+						'created_at'		=> $version->pubDate,
+						'extension_class' 	=> $addon_id
+					);
+
+					if ($version->enclosure) {
+						$versions[$addon_id]['download'] = array(
+							'url' => (string)$version->enclosure['url'],
+							'type' =>  (string)$version->enclosure['type'],
+							'size' => (string)$version->enclosure['length']
+						);
+
+						if (isset($config['nsm_addon_updater']['custom_download_url'])) {
+							$versions[$addon_id]['download']['url'] = call_user_func($config['nsm_addon_updater']['custom_download_url'], $versions[$addon_id]);
+						}
+					}
+				}
+			}
+		}
+		
+		echo json_encode($version);
+		
+		//echo $EE->load->view("/accessory/updates", array('versions' => $versions), TRUE); 
 	}
 
 	// =======================
@@ -190,6 +285,68 @@ class Nsm_addon_updater_acc
 
 		return $feeds;
 	}
+	
+	
+	/**
+	 * Loads a single feed from the cache or new from the server
+	 *
+	 * @version		1.0.0
+	 * @since		Version 1.0.0
+	 * @access		private
+	 * @return		array An array of RSS feed XML
+	 **/
+	public function _updateFeed($addon_id)
+	{
+		$EE =& get_instance();
+
+		require_once PATH_THIRD . "nsm_addon_updater/libraries/Epicurl.php";
+
+		$sources = FALSE;
+		$version = FALSE;
+		$mc = EpiCurl::getInstance();
+
+		$addon = $EE->addons->_packages[$addon_id];
+		
+		$config_file = PATH_THIRD . '/' . $addon_id . '/config.php';
+
+		if (!file_exists($config_file)) {
+			continue;
+		}
+
+		include $config_file;
+
+		# Is there a file with the xml url?
+		if (isset($config['nsm_addon_updater']['versions_xml'])) {
+			$url = $config['nsm_addon_updater']['versions_xml'];
+
+			# Get the XML again if it isn't in the cache
+			if ($this->test_mode || ! $xml = $this->_readCache(md5($url))) {
+
+				log_message('debug', "Checking for updates via CURL: {$addon_id}");
+
+				$c = FALSE;
+				$c = curl_init($url);
+				curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
+				@curl_setopt($c, CURLOPT_FOLLOWLOCATION, 1);
+				$curls[$addon_id] = $mc->addCurl($c);
+				$xml = FALSE;
+				if($curls[$addon_id]->code == "200" || $curls[$addon_id]->code == "302") {
+					$xml = $curls[$addon_id]->data;
+					$this->_createCacheFile($xml, md5($url));
+				}
+			}
+		}
+
+		# If there isn't an error with the XML
+		if ($xml = @simplexml_load_string($xml, 'SimpleXMLElement',  LIBXML_NOCDATA)) {
+			$version = $xml;
+		}
+
+		unset($config);
+
+		return $version;
+	}
+
 
 	/**
 	 * Creates a cache file populated with data based on a URL
