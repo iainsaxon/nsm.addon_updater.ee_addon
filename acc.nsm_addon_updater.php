@@ -56,7 +56,7 @@ class Nsm_addon_updater_acc
 	 *
 	 * @var boolean
 	 **/
-	var $test_mode		= FALSE;
+	var $test_mode		= true;
 
 	/**
 	 * Constructor
@@ -94,22 +94,33 @@ class Nsm_addon_updater_acc
 	function process_ajax_feeds()
 	{
 		$EE =& get_instance();
+		$EE->output->enable_profiler = 0;
 		$versions = FALSE;
-
+		
+		$this->_log(__LINE__.': STARTING ADDON UPDATER FUNCTIONS AT '.date('r').'...', true);
+		
 		if ($feeds = $this->_updateFeeds()) {
 			foreach ($feeds as $addon_id => $feed) {
 				$namespaces = $feed->getNameSpaces(true);
 				$latest_version = 0;
 
+				$this->_log(__LINE__.': Including XML file: '.PATH_THIRD . '/' . $addon_id . '/config.php');
+				
 				include PATH_THIRD . '/' . $addon_id . '/config.php';
-
+				$this->_log(__LINE__.': '.$addon_id.' at version '.$config['version']);
+				
 				if (!empty($feed->channel->item)) {
 					foreach ($feed->channel->item as $version) {
 						$ee_addon = $version->children($namespaces['ee_addon']);
 						$version_number = (string)$ee_addon->version;
 
+						$this->_log(__LINE__.': Checking version '.$version_number.' of '.$addon_id);
+
 						if (version_compare($version_number, $config['version'], '>') && version_compare($version_number, $latest_version, '>') ) {
-						    $latest_version = $version_number;
+						    
+							$this->_log(__LINE__.': '.$addon_id.' version '.$version_number.' more recent than installed '.$config['version']);
+						
+							$latest_version = $version_number;
 							$versions[$addon_id] = array(
 								'addon_name' 		=> $config['name'],
 								'installed_version' => $config['version'],
@@ -143,6 +154,9 @@ class Nsm_addon_updater_acc
 		$EE->cp->load_package_css("accessory_tab");
 
 		echo $EE->load->view("/accessory/updates", array('versions' => $versions), TRUE);
+		
+		$this->_log(__LINE__.': ADDON UPDATER FUNCTIONS COMPLETE.');
+		
 		exit;
 	}
 
@@ -168,23 +182,33 @@ class Nsm_addon_updater_acc
 		$feeds = FALSE;
 		$mc = EpiCurl::getInstance();
 
+		$this->_log(__LINE__.': EpiCurl loaded, iterating over EE packages');
+
 		foreach ($EE->addons->_packages as $addon_id => $addon) {
 			$config_file = PATH_THIRD . '/' . $addon_id . '/config.php';
 
+			$this->_log(__LINE__.': Reading '.$config_file);
+			
 			if (!file_exists($config_file)) {
+				$this->_log(__LINE__.': No file at '.$config_file);
 				continue;
 			}
-
+			
+			$this->_log(__LINE__.': Including config file '.$config_file);
+			
 			include $config_file;
 
 			# Is there a file with the xml url?
+			$this->_log('Checking for addon feed in '.$addon_id);
+			
 			if (isset($config['nsm_addon_updater']['versions_xml'])) {
 				$url = $config['nsm_addon_updater']['versions_xml'];
 
+				$this->_log(__LINE__.': Addon feed for '.$addon_id.' is '.$url);
 				# Get the XML again if it isn't in the cache
 				if ($this->test_mode || ! $xml = $this->_readCache(md5($url))) {
 
-					log_message('debug', "Checking for updates via CURL: {$addon_id}");
+					$this->_log(__LINE__.': Getting feed from '.$url);
 
 					$c = FALSE;
 					$c = curl_init($url);
@@ -192,21 +216,27 @@ class Nsm_addon_updater_acc
 					@curl_setopt($c, CURLOPT_FOLLOWLOCATION, 1);
 					$curls[$addon_id] = $mc->addCurl($c);
 					$xml = FALSE;
+					
+					$this->_log(__LINE__.': '.$addon_id.' cURL: '.$curls[$addon_id]->code);
+					
 					if($curls[$addon_id]->code == "200" || $curls[$addon_id]->code == "302") {
+						$this->_log(__LINE__.': Building cache at '.md5($url));
 						$xml = $curls[$addon_id]->data;
 						$this->_createCacheFile($xml, md5($url));
 					}
 				}
 			}
+			$this->_log(__LINE__.': Reading XML for '.$addon_id);
 
 			# If there isn't an error with the XML
 			if ($xml = @simplexml_load_string($xml, 'SimpleXMLElement',  LIBXML_NOCDATA)) {
+				$this->_log(__LINE__.': XML successfully loaded for '.$addon_id);
 				$feeds[$addon_id] = $xml;
 			}
-
+			$this->_log(__LINE__.': Finished with '.$addon_id.' config file');
 			unset($config);
 		}
-
+		$this->_log(__LINE__.': Returning update feeds');
 		return $feeds;
 	}
 
@@ -232,8 +262,9 @@ class Nsm_addon_updater_acc
 			return;
 		}
 		if ( ! $fp = fopen($filepath, FOPEN_WRITE_CREATE_DESTRUCTIVE)) {
-			// print("<!-- Unable to write cache file: ".$filepath." -->\n");
-			log_message('error', "Unable to write cache file: ".$filepath);
+			
+			$this->_log(__LINE__.': Unable to write cache file: '.$filepath);
+			
 			return;
 		}
 
@@ -243,8 +274,7 @@ class Nsm_addon_updater_acc
 		fclose($fp);
 		chmod($filepath, DIR_WRITE_MODE);
 
-		// print("<!-- Cache file written: " . $filepath . " -->\n");
-		log_message('debug', "Cache file written: " . $filepath);
+		$this->_log(__LINE__.': Cache file written: '.$filepath);
 	}
 
 	/**
@@ -261,18 +291,19 @@ class Nsm_addon_updater_acc
 		$cache = FALSE;
 		$cache_path = APPPATH.'cache/' . NSM_ADDON_UPDATER_ADDON_ID;
 		$filepath = $cache_path ."/". $key . ".xml";
-
+		$this->_log(__LINE__.': Reading cache file '.$filepath);
+		
 		if ( ! file_exists($filepath)) {
 			return FALSE;
 		}
 		if ( ! $fp = fopen($filepath, FOPEN_READ)) {
 			@unlink($filepath);
-			log_message('debug', "Error reading cache file. File deleted");
+			$this->_log(__LINE__.': Error reading cache file. File deleted');
 			return FALSE;
 		}
 		if ( ! filesize($filepath)) {
 			@unlink($filepath);
-			log_message('debug', "Error getting cache file size. File deleted");
+			$this->_log(__LINE__.': Error getting cache file size. File deleted');
 			return FALSE;
 		}
 		
@@ -281,8 +312,7 @@ class Nsm_addon_updater_acc
 		
 		if ( (filemtime($filepath) + $cache_timeout) < time() ) {
 			@unlink($filepath);
-			// print("<!-- Cache file has expired. File deleted: " . $filepath . " -->\n");
-			log_message('debug', "Cache file has expired. File deleted");
+			$this->_log(__LINE__.': Cache file has expired. File deleted');
 			return FALSE;
 		}
 
@@ -290,8 +320,8 @@ class Nsm_addon_updater_acc
 		$cache = fread($fp, filesize($filepath));
 		flock($fp, LOCK_UN);
 		fclose($fp);
-
-		//print("<!-- Loaded file from cache: " . $filepath . " -->\n");
+		
+		$this->_log(__LINE__.': Cache '.$filepath.' successfully loaded');
 
 		return $cache;
 	}
@@ -306,6 +336,45 @@ class Nsm_addon_updater_acc
 	public static function nsm_addon_updater_download_url($versions)
 	{
 		return $versions['download']['url'];
+	}
+
+	private function _log($data, $reset = false)
+	{
+		if (! $this->test_mode) {
+			return;
+		}
+		
+		$cache_path = APPPATH.'cache/' . NSM_ADDON_UPDATER_ADDON_ID;
+		$filepath = $cache_path ."/debug_log.txt";
+	
+		if (! is_dir($cache_path)) {
+			mkdir($cache_path . "", 0777, TRUE);
+		}
+		if (! is_really_writable($cache_path)) {
+			return;
+		}
+		
+		// resets the file contents
+		if ($reset) {
+			if (! $fp = fopen($filepath, FOPEN_WRITE_CREATE_DESTRUCTIVE)) {
+				return;
+			}
+			flock($fp, LOCK_EX);
+			fwrite($fp, '');
+			flock($fp, LOCK_UN);
+			fclose($fp);
+		}
+		
+		if (! $fp = fopen($filepath, FOPEN_WRITE_CREATE)) {
+			return;
+		}
+		
+		flock($fp, LOCK_EX);
+		fwrite($fp, "\n\n".$data);
+		flock($fp, LOCK_UN);
+		fclose($fp);
+		chmod($filepath, DIR_WRITE_MODE);
+		
 	}
 
 }
