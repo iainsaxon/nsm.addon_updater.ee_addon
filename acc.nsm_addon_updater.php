@@ -93,6 +93,8 @@ class Nsm_addon_updater_acc
 	*/
 	function process_ajax_feeds()
 	{
+		require_once 'error_handler.php';
+		
 		$EE =& get_instance();
 		$EE->output->enable_profiler = 0;
 		$versions = FALSE;
