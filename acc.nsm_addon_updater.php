@@ -222,9 +222,11 @@ class Nsm_addon_updater_acc
 					$this->_log(__LINE__.': '.$addon_id.' cURL: '.$curls[$addon_id]->code);
 					
 					if($curls[$addon_id]->code == "200" || $curls[$addon_id]->code == "302") {
-						$this->_log(__LINE__.': Building cache at '.md5($url));
+						$this->_log(__LINE__.': Building successful cache at '.md5($url));
 						$xml = $curls[$addon_id]->data;
 						$this->_createCacheFile($xml, md5($url));
+					} else {
+						throw new ErrorException('Could not retrieve changelog for add-on `'.$addon_id.'`');
 					}
 				}
 				
