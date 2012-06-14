@@ -227,13 +227,17 @@ class Nsm_addon_updater_acc
 						$this->_createCacheFile($xml, md5($url));
 					}
 				}
-			}
-			$this->_log(__LINE__.': Reading XML for '.$addon_id);
+				
+				$this->_log(__LINE__.': Reading XML for '.$addon_id);
 
-			# If there isn't an error with the XML
-			if ($xml = @simplexml_load_string($xml, 'SimpleXMLElement',  LIBXML_NOCDATA)) {
-				$this->_log(__LINE__.': XML successfully loaded for '.$addon_id);
-				$feeds[$addon_id] = $xml;
+				# If there isn't an error with the XML
+				try {
+					$xmlObject = @simplexml_load_string($xml, 'SimpleXMLElement',  LIBXML_NOCDATA);
+					$this->_log(__LINE__.': XML successfully loaded for '.$addon_id);
+					$feeds[$addon_id] = $xmlObject;
+				} catch (ErrorException $e) {
+					throw new ErrorException('Invalid XML file for add-on `'.$addon_id.'`');
+				}
 			}
 			$this->_log(__LINE__.': Finished with '.$addon_id.' config file');
 			unset($config);
@@ -377,6 +381,21 @@ class Nsm_addon_updater_acc
 		fclose($fp);
 		chmod($filepath, DIR_WRITE_MODE);
 		
+	}
+
+	public function process_read_log()
+	{
+		$cache_path = APPPATH.'cache/' . NSM_ADDON_UPDATER_ADDON_ID;
+		$filepath = $cache_path ."/debug_log.txt";
+		if (!file_exists($filepath)) {
+			exit;
+		}
+		$fp = fopen($filepath, 'rb');
+		if (!$fp) {
+			exit;
+		}
+		$log = fread($fp, filesize($filepath));
+		die('<pre>'.$log.'</pre>');
 	}
 
 }

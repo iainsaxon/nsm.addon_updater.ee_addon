@@ -23,4 +23,12 @@ function search_and_destroy_ee(&$array) {
 	return $array;
 }
 
+function exception_handler($exception) {
+	header("HTTP/1.1 500 Internal Server Error");
+	echo $exception->getMessage();
+	exit;
+}
+
+set_exception_handler('exception_handler');
+
 set_error_handler('exceptions_error_handler');
