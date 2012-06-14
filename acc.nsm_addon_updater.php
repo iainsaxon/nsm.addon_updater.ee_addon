@@ -56,7 +56,7 @@ class Nsm_addon_updater_acc
 	 *
 	 * @var boolean
 	 **/
-	var $test_mode		= true;
+	var $test_mode		= false;
 
 	/**
 	 * Constructor
@@ -491,7 +491,6 @@ class Nsm_addon_updater_acc
 		fwrite($fp, $data);
 		flock($fp, LOCK_UN);
 		fclose($fp);
-		chmod($filepath, DIR_WRITE_MODE);
 
 		$this->_log(__LINE__.': Cache file written: '.$filepath);
 	}
@@ -592,7 +591,6 @@ class Nsm_addon_updater_acc
 		fwrite($fp, "\n\n".$data);
 		flock($fp, LOCK_UN);
 		fclose($fp);
-		chmod($filepath, DIR_WRITE_MODE);
 		
 	}
 

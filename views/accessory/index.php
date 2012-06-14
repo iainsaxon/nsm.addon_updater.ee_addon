@@ -11,9 +11,9 @@
 						<th scope="col">Installed</th>
 						<th scope="col">Latest</th>
 						<th scope="col">Status</th>
-						<th scope="col">&nbsp;</th>
-						<th scope="col">&nbsp;</th>
-						<th scope="col">&nbsp;</th>
+						<th scope="col">Notes</th>
+						<th scope="col">Documentation</th>
+						<th scope="col">Download</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -41,7 +41,7 @@
 							</span>
 						</td>
 						<td>
-							<span data-nsm_addon_updater_cell="notes_anchor">
+							<span data-nsm_addon_updater_cell="notes_trigger">
 								-
 							</span>
 						</td>
@@ -51,7 +51,7 @@
 							</span>
 						</td>
 						<td>
-							<span data-nsm_addon_updater_cell="download_url">
+							<span data-nsm_addon_updater_cell="download">
 								-
 							</span>
 						</td>
